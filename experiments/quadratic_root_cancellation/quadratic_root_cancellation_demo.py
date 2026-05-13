@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
 WIDTH = 512
@@ -13,6 +13,7 @@ UP = np.array([0.0, 1.0, 0.0], dtype=np.float32)
 SPHERE_RADIUS = np.float32(10000000.0)
 SPHERE_CENTER = np.array([0.0, -SPHERE_RADIUS, 0.0], dtype=np.float32)
 EPSILON = np.float32(1e-4)
+OUTPUT_DIR = Path(__file__).resolve().parent
 
 
 def normalize(v: np.ndarray) -> np.ndarray:
@@ -41,9 +42,42 @@ def generate_camera_rays():
     return normalize(dirs)
 
 
-def save_image(rgb: np.ndarray, path: Path) -> None:
+def to_image(rgb: np.ndarray) -> Image.Image:
     img = np.clip(rgb * np.float32(255.0), 0.0, 255.0).astype(np.uint8)
-    Image.fromarray(img, mode="RGB").save(path)
+    return Image.fromarray(img, mode="RGB")
+
+
+def save_comparison_image(original_rgb: np.ndarray, stable_rgb: np.ndarray, path: Path) -> None:
+    label_height = 40
+    gap = 8
+    original_img = to_image(original_rgb)
+    stable_img = to_image(stable_rgb)
+
+    canvas = Image.new(
+        "RGB",
+        (WIDTH * 2 + gap, HEIGHT + label_height),
+        color=(18, 18, 18),
+    )
+    draw = ImageDraw.Draw(canvas)
+
+    original_x = 0
+    stable_x = WIDTH + gap
+    canvas.paste(original_img, (original_x, label_height))
+    canvas.paste(stable_img, (stable_x, label_height))
+
+    draw.text((12, 12), "original", fill=(235, 235, 235))
+    draw.text((stable_x + 12, 12), "stable", fill=(235, 235, 235))
+    canvas.save(path)
+
+
+def remove_stale_single_outputs() -> None:
+    for name in ("huge_sphere_original.png", "huge_sphere_stable.png"):
+        path = OUTPUT_DIR / name
+        if path.exists():
+            try:
+                path.unlink()
+            except PermissionError:
+                print(f"warning: could not remove stale single-output image: {path}")
 
 
 def checker_color(points: np.ndarray, hit_mask: np.ndarray) -> np.ndarray:
@@ -168,12 +202,12 @@ def print_debug(label: str, result: dict) -> None:
 
 def main():
     ray_dirs = generate_camera_rays()
+    remove_stale_single_outputs()
 
     original_rgb, original_result = render("original", ray_dirs)
     stable_rgb, stable_result = render("stable", ray_dirs)
 
-    save_image(original_rgb, Path("huge_sphere_original.png"))
-    save_image(stable_rgb, Path("huge_sphere_stable.png"))
+    save_comparison_image(original_rgb, stable_rgb, OUTPUT_DIR / "huge_sphere_comparison.png")
 
     print_debug("original", original_result)
     print_debug("stable", stable_result)

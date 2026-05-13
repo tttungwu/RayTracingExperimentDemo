@@ -1,8 +1,7 @@
-import math
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
 WIDTH = 512
@@ -10,7 +9,7 @@ HEIGHT = 512
 VIEW_HALF_SIZE = np.float32(1.25)
 SPHERE_RADIUS = np.float32(1.0)
 DISTANCES = (100.0, 2000.0, 4100.0)
-OUTPUT_DIR = Path(".")
+OUTPUT_DIR = Path(__file__).resolve().parent
 
 
 def normalize(v: np.ndarray) -> np.ndarray:
@@ -33,9 +32,41 @@ def make_ortho_rays():
     return origins, directions
 
 
-def save_image(rgb: np.ndarray, path: Path) -> None:
+def to_image(rgb: np.ndarray) -> Image.Image:
     img = np.clip(rgb * np.float32(255.0), 0.0, 255.0).astype(np.uint8)
-    Image.fromarray(img, mode="RGB").save(path)
+    return Image.fromarray(img, mode="RGB")
+
+
+def save_comparison_image(distance: float, original_rgb: np.ndarray, stable_rgb: np.ndarray, path: Path) -> None:
+    label_height = 40
+    gap = 8
+    original_img = to_image(original_rgb)
+    stable_img = to_image(stable_rgb)
+
+    canvas = Image.new(
+        "RGB",
+        (WIDTH * 2 + gap, HEIGHT + label_height),
+        color=(18, 18, 18),
+    )
+    draw = ImageDraw.Draw(canvas)
+
+    original_x = 0
+    stable_x = WIDTH + gap
+    canvas.paste(original_img, (original_x, label_height))
+    canvas.paste(stable_img, (stable_x, label_height))
+
+    draw.text((12, 12), f"distance={int(distance)} original", fill=(235, 235, 235))
+    draw.text((stable_x + 12, 12), f"distance={int(distance)} stable", fill=(235, 235, 235))
+    canvas.save(path)
+
+
+def remove_stale_single_outputs() -> None:
+    for pattern in ("dist_*_original.png", "dist_*_stable.png"):
+        for path in OUTPUT_DIR.glob(pattern):
+            try:
+                path.unlink()
+            except PermissionError:
+                print(f"warning: could not remove stale single-output image: {path}")
 
 
 def render_sphere(distance: float, method: str, origins: np.ndarray, directions: np.ndarray):
@@ -121,18 +152,22 @@ def render_sphere(distance: float, method: str, origins: np.ndarray, directions:
 
 def main():
     origins, directions = make_ortho_rays()
+    remove_stale_single_outputs()
 
     for distance in DISTANCES:
+        rendered = {}
         for method in ("original", "stable"):
             rgb, debug = render_sphere(distance, method, origins, directions)
-            out_name = f"dist_{int(distance)}_{method}.png"
-            save_image(rgb, OUTPUT_DIR / out_name)
+            rendered[method] = rgb
             print(
                 f"[{method}] dist={int(distance)} "
                 f"hit_pixels={debug['hit_pixels']} "
                 f"center(bb={debug['center_bb']:.7g}, 4ac={debug['center_4ac']:.7g}, delta={debug['center_delta']:.7g}) "
                 f"delta_range=[{debug['delta_min']:.7g}, {debug['delta_max']:.7g}]"
             )
+
+        out_name = f"dist_{int(distance)}_comparison.png"
+        save_comparison_image(distance, rendered["original"], rendered["stable"], OUTPUT_DIR / out_name)
 
 
 if __name__ == "__main__":
