@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cosine Power Distribution Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #101318;
+      color: #eef2f7;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(74, 125, 190, 0.16), transparent 28rem),
+        linear-gradient(135deg, #101318 0%, #171a20 48%, #0e1514 100%);
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    .panel {
+      position: fixed;
+      left: 18px;
+      top: 18px;
+      width: min(390px, calc(100vw - 36px));
+      padding: 16px 16px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      background: rgba(13, 17, 23, 0.78);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 720;
+      letter-spacing: 0;
+    }
+
+    .formula {
+      margin: 0 0 14px;
+      color: #cbd6e2;
+      font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+
+    label {
+      color: #d7e0ea;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #61d095;
+    }
+
+    input[type="number"] {
+      width: 72px;
+      padding: 6px 8px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #eef2f7;
+      font: inherit;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      padding: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.055);
+      min-width: 0;
+    }
+
+    .stat span {
+      display: block;
+      color: #9fb0c3;
+      font-size: 11px;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 3px;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+      font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    .hint {
+      margin: 13px 0 0;
+      color: #aebccc;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    button {
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #eef2f7;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
+    .badge {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgba(13, 17, 23, 0.72);
+      color: #c6d2df;
+      font-size: 12px;
+      pointer-events: none;
+    }
+
+    @media (max-width: 620px) {
+      .panel {
+        left: 10px;
+        top: 10px;
+        width: calc(100vw - 20px);
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .badge {
+        left: 10px;
+        right: auto;
+        bottom: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <section class="panel" aria-label="distribution controls">
+    <h1>Cosine Power Distribution</h1>
+    <p class="formula">p(theta, phi) = ((s + 1) / (2*pi)) * cos(theta)^s, 0 &lt;= theta &lt;= pi/2</p>
+    <div class="row">
+      <label for="sSlider">s</label>
+      <input id="sSlider" type="range" min="0" max="128" step="0.1" value="8">
+      <input id="sInput" type="number" min="0" max="128" step="0.1" value="8">
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <span>peak p(0, phi)</span>
+        <strong id="peakValue">-</strong>
+      </div>
+      <div class="stat">
+        <span>half-max theta</span>
+        <strong id="halfAngle">-</strong>
+      </div>
+      <div class="stat">
+        <span>normalization</span>
+        <strong>integral = 1</strong>
+      </div>
+    </div>
+    <div class="button-row">
+      <button id="resetCamera" type="button">Reset Camera</button>
+      <button id="toggleWire" type="button">Toggle Wire</button>
+    </div>
+    <p class="hint">Click the viewport to capture the mouse. Move with W A S D, Space, Ctrl. Release with Esc.</p>
+  </section>
+
+  <div class="badge" id="cameraBadge">camera</div>
+
+  <script>
+    const canvas = document.getElementById("view");
+    const ctx = canvas.getContext("2d", { alpha: false });
+    const slider = document.getElementById("sSlider");
+    const input = document.getElementById("sInput");
+    const peakValue = document.getElementById("peakValue");
+    const halfAngle = document.getElementById("halfAngle");
+    const cameraBadge = document.getElementById("cameraBadge");
+    const resetCamera = document.getElementById("resetCamera");
+    const toggleWire = document.getElementById("toggleWire");
+
+    const TAU = Math.PI * 2;
+    const THETA_MAX = Math.PI * 0.5;
+    const THETA_STEPS = 36;
+    const PHI_STEPS = 72;
+    const keys = new Set();
+
+    let width = 1;
+    let height = 1;
+    let deviceScale = 1;
+    let sValue = 8;
+    let showWire = true;
+    let lastTime = performance.now();
+
+    const camera = {
+      position: { x: 0.0, y: 1.1, z: 3.8 },
+      yaw: -Math.PI * 0.5,
+      pitch: -0.18,
+      fov: 68 * Math.PI / 180,
+      speed: 2.2,
+      sensitivity: 0.0022,
+    };
+
+    function clamp(value, lo, hi) {
+      return Math.max(lo, Math.min(hi, value));
+    }
+
+    function resize() {
+      deviceScale = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      width = Math.floor(window.innerWidth * deviceScale);
+      height = Math.floor(window.innerHeight * deviceScale);
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    function resetCameraState() {
+      camera.position.x = 0.0;
+      camera.position.y = 1.1;
+      camera.position.z = 3.8;
+      camera.yaw = -Math.PI * 0.5;
+      camera.pitch = -0.18;
+    }
+
+    function syncS(value) {
+      sValue = clamp(Number(value) || 0, 0, 128);
+      slider.value = String(sValue);
+      input.value = String(Math.round(sValue * 10) / 10);
+      const peak = (sValue + 1) / (2 * Math.PI);
+      const half = sValue <= 0 ? 90 : Math.acos(Math.pow(0.5, 1 / sValue)) * 180 / Math.PI;
+      peakValue.textContent = peak.toFixed(5);
+      halfAngle.textContent = `${half.toFixed(2)} deg`;
+    }
+
+    function vecAdd(a, b) {
+      return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
+    }
+
+    function vecScale(v, k) {
+      return { x: v.x * k, y: v.y * k, z: v.z * k };
+    }
+
+    function vecDot(a, b) {
+      return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
+
+    function vecCross(a, b) {
+      return {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x,
+      };
+    }
+
+    function vecNormalize(v) {
+      const len = Math.hypot(v.x, v.y, v.z) || 1;
+      return { x: v.x / len, y: v.y / len, z: v.z / len };
+    }
+
+    function cameraBasis() {
+      const cp = Math.cos(camera.pitch);
+      const forward = vecNormalize({
+        x: Math.cos(camera.yaw) * cp,
+        y: Math.sin(camera.pitch),
+        z: Math.sin(camera.yaw) * cp,
+      });
+      const worldUp = { x: 0, y: 1, z: 0 };
+      const right = vecNormalize(vecCross(forward, worldUp));
+      const up = vecNormalize(vecCross(right, forward));
+      return { forward, right, up };
+    }
+
+    function worldToCamera(point, basis) {
+      const rel = {
+        x: point.x - camera.position.x,
+        y: point.y - camera.position.y,
+        z: point.z - camera.position.z,
+      };
+      return {
+        x: vecDot(rel, basis.right),
+        y: vecDot(rel, basis.up),
+        z: vecDot(rel, basis.forward),
+      };
+    }
+
+    function project(point, basis) {
+      const cam = worldToCamera(point, basis);
+      if (cam.z <= 0.035) {
+        return null;
+      }
+      const focal = (height * 0.5) / Math.tan(camera.fov * 0.5);
+      return {
+        x: width * 0.5 + cam.x * focal / cam.z,
+        y: height * 0.52 - cam.y * focal / cam.z,
+        z: cam.z,
+      };
+    }
+
+    function distributionPoint(thetaIndex, phiIndex) {
+      const theta = clamp(thetaIndex / THETA_STEPS, 0, 1) * THETA_MAX;
+      const phi = (phiIndex / PHI_STEPS) * TAU;
+      const cosTheta = Math.cos(theta);
+      const density = ((sValue + 1) / (2 * Math.PI)) * Math.pow(cosTheta, sValue);
+      const peak = (sValue + 1) / (2 * Math.PI);
+      const radius = 0.2 + 1.75 * (density / peak);
+      const sinTheta = Math.sin(theta);
+      return {
+        x: radius * sinTheta * Math.cos(phi),
+        y: radius * cosTheta,
+        z: radius * sinTheta * Math.sin(phi),
+        density,
+        density01: density / peak,
+        theta,
+      };
+    }
+
+    function colorFor(t, shade) {
+      const cold = [65, 108, 190];
+      const mid = [72, 203, 147];
+      const hot = [244, 186, 91];
+      const a = t < 0.55 ? cold : mid;
+      const b = t < 0.55 ? mid : hot;
+      const localT = t < 0.55 ? t / 0.55 : (t - 0.55) / 0.45;
+      const r = Math.round((a[0] + (b[0] - a[0]) * localT) * shade);
+      const g = Math.round((a[1] + (b[1] - a[1]) * localT) * shade);
+      const bl = Math.round((a[2] + (b[2] - a[2]) * localT) * shade);
+      return `rgb(${r}, ${g}, ${bl})`;
+    }
+
+    function drawLine3D(a, b, basis, color, lineWidth = 1) {
+      const pa = project(a, basis);
+      const pb = project(b, basis);
+      if (!pa || !pb) {
+        return;
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth * deviceScale;
+      ctx.beginPath();
+      ctx.moveTo(pa.x, pa.y);
+      ctx.lineTo(pb.x, pb.y);
+      ctx.stroke();
+    }
+
+    function drawGrid(basis) {
+      ctx.lineCap = "round";
+      for (let i = -4; i <= 4; i++) {
+        const alpha = i === 0 ? 0.4 : 0.16;
+        drawLine3D({ x: -2, y: 0, z: i * 0.5 }, { x: 2, y: 0, z: i * 0.5 }, basis, `rgba(210, 222, 236, ${alpha})`);
+        drawLine3D({ x: i * 0.5, y: 0, z: -2 }, { x: i * 0.5, y: 0, z: 2 }, basis, `rgba(210, 222, 236, ${alpha})`);
+      }
+      drawLine3D({ x: 0, y: 0, z: 0 }, { x: 1.25, y: 0, z: 0 }, basis, "rgba(255, 116, 116, 0.9)", 2);
+      drawLine3D({ x: 0, y: 0, z: 0 }, { x: 0, y: 1.7, z: 0 }, basis, "rgba(107, 220, 139, 0.9)", 2);
+      drawLine3D({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1.25 }, basis, "rgba(112, 166, 255, 0.9)", 2);
+    }
+
+    function buildSurface(basis) {
+      const points = [];
+      for (let t = 0; t <= THETA_STEPS; t++) {
+        points[t] = [];
+        for (let p = 0; p <= PHI_STEPS; p++) {
+          points[t][p] = distributionPoint(t, p);
+        }
+      }
+
+      const faces = [];
+      for (let t = 0; t < THETA_STEPS; t++) {
+        for (let p = 0; p < PHI_STEPS; p++) {
+          const a = points[t][p];
+          const b = points[t + 1][p];
+          const c = points[t + 1][p + 1];
+          const d = points[t][p + 1];
+          const center = {
+            x: (a.x + b.x + c.x + d.x) * 0.25,
+            y: (a.y + b.y + c.y + d.y) * 0.25,
+            z: (a.z + b.z + c.z + d.z) * 0.25,
+          };
+          const centerCam = worldToCamera(center, basis);
+          if (centerCam.z <= 0.025) {
+            continue;
+          }
+          faces.push({
+            vertices: [a, b, c, d],
+            depth: centerCam.z,
+            density01: (a.density01 + b.density01 + c.density01 + d.density01) * 0.25,
+          });
+        }
+      }
+      faces.sort((a, b) => b.depth - a.depth);
+      return faces;
+    }
+
+    function drawSurface(basis) {
+      const light = vecNormalize({ x: -0.35, y: 0.9, z: 0.25 });
+      const faces = buildSurface(basis);
+      for (const face of faces) {
+        const projected = face.vertices.map(v => project(v, basis));
+        if (projected.some(v => v === null)) {
+          continue;
+        }
+        const e1 = {
+          x: face.vertices[1].x - face.vertices[0].x,
+          y: face.vertices[1].y - face.vertices[0].y,
+          z: face.vertices[1].z - face.vertices[0].z,
+        };
+        const e2 = {
+          x: face.vertices[3].x - face.vertices[0].x,
+          y: face.vertices[3].y - face.vertices[0].y,
+          z: face.vertices[3].z - face.vertices[0].z,
+        };
+        const normal = vecNormalize(vecCross(e1, e2));
+        const shade = 0.58 + 0.38 * Math.max(0, vecDot(normal, light));
+
+        ctx.beginPath();
+        ctx.moveTo(projected[0].x, projected[0].y);
+        for (let i = 1; i < projected.length; i++) {
+          ctx.lineTo(projected[i].x, projected[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = colorFor(face.density01, shade);
+        ctx.fill();
+
+        if (showWire) {
+          ctx.strokeStyle = "rgba(8, 16, 25, 0.42)";
+          ctx.lineWidth = 0.7 * deviceScale;
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawEquatorRings(basis) {
+      for (const theta of [15, 30, 45, 60, 75]) {
+        const tIndex = Math.round(theta / 90 * THETA_STEPS);
+        let previous = null;
+        for (let p = 0; p <= PHI_STEPS; p++) {
+          const current = distributionPoint(tIndex, p);
+          if (previous) {
+            drawLine3D(previous, current, basis, "rgba(255, 255, 255, 0.28)");
+          }
+          previous = current;
+        }
+      }
+    }
+
+    function drawScene() {
+      const basis = cameraBasis();
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, "#131821");
+      gradient.addColorStop(0.55, "#11161b");
+      gradient.addColorStop(1, "#0c1211");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+
+      drawGrid(basis);
+      drawSurface(basis);
+      drawEquatorRings(basis);
+
+      const pos = camera.position;
+      cameraBadge.textContent = `pos ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)} | s ${sValue.toFixed(1)}`;
+    }
+
+    function updateCamera(dt) {
+      const basis = cameraBasis();
+      let move = { x: 0, y: 0, z: 0 };
+      if (keys.has("KeyW")) move = vecAdd(move, basis.forward);
+      if (keys.has("KeyS")) move = vecAdd(move, vecScale(basis.forward, -1));
+      if (keys.has("KeyD")) move = vecAdd(move, basis.right);
+      if (keys.has("KeyA")) move = vecAdd(move, vecScale(basis.right, -1));
+      if (keys.has("Space")) move.y += 1;
+      if (keys.has("ControlLeft") || keys.has("ControlRight")) move.y -= 1;
+
+      const len = Math.hypot(move.x, move.y, move.z);
+      if (len > 0) {
+        const scale = camera.speed * dt / len;
+        camera.position.x += move.x * scale;
+        camera.position.y += move.y * scale;
+        camera.position.z += move.z * scale;
+      }
+    }
+
+    function frame(now) {
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+      updateCamera(dt);
+      drawScene();
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener("resize", resize);
+    window.addEventListener("keydown", event => {
+      keys.add(event.code);
+      if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ControlLeft", "ControlRight"].includes(event.code)) {
+        event.preventDefault();
+      }
+    });
+    window.addEventListener("keyup", event => keys.delete(event.code));
+
+    canvas.addEventListener("click", () => {
+      canvas.requestPointerLock?.();
+    });
+
+    document.addEventListener("mousemove", event => {
+      if (document.pointerLockElement !== canvas) {
+        return;
+      }
+      camera.yaw += event.movementX * camera.sensitivity;
+      camera.pitch = clamp(camera.pitch - event.movementY * camera.sensitivity, -1.48, 1.48);
+    });
+
+    slider.addEventListener("input", () => syncS(slider.value));
+    input.addEventListener("input", () => syncS(input.value));
+    resetCamera.addEventListener("click", resetCameraState);
+    toggleWire.addEventListener("click", () => {
+      showWire = !showWire;
+    });
+
+    resize();
+    syncS(sValue);
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
