@@ -199,7 +199,7 @@
       </div>
       <div class="stat">
         <span>normalization</span>
-        <strong>integral = 1</strong>
+        <strong>hemisphere = 1</strong>
       </div>
     </div>
     <div class="button-row">
@@ -224,8 +224,10 @@
 
     const TAU = Math.PI * 2;
     const THETA_MAX = Math.PI * 0.5;
-    const THETA_STEPS = 36;
-    const PHI_STEPS = 72;
+    const THETA_STEPS = 160;
+    const PHI_STEPS = 128;
+    const S_MAX = 128;
+    const MAX_DENSITY = (S_MAX + 1) / (2 * Math.PI);
     const keys = new Set();
 
     let width = 1;
@@ -236,11 +238,11 @@
     let lastTime = performance.now();
 
     const camera = {
-      position: { x: 0.0, y: 1.1, z: 3.8 },
+      position: { x: 0.0, y: 4.0, z: 14.0 },
       yaw: -Math.PI * 0.5,
       pitch: -0.18,
       fov: 68 * Math.PI / 180,
-      speed: 2.2,
+      speed: 7.0,
       sensitivity: 0.0022,
     };
 
@@ -258,14 +260,14 @@
 
     function resetCameraState() {
       camera.position.x = 0.0;
-      camera.position.y = 1.1;
-      camera.position.z = 3.8;
+      camera.position.y = 4.0;
+      camera.position.z = 14.0;
       camera.yaw = -Math.PI * 0.5;
       camera.pitch = -0.18;
     }
 
     function syncS(value) {
-      sValue = clamp(Number(value) || 0, 0, 128);
+      sValue = clamp(Number(value) || 0, 0, S_MAX);
       slider.value = String(sValue);
       input.value = String(Math.round(sValue * 10) / 10);
       const peak = (sValue + 1) / (2 * Math.PI);
@@ -339,19 +341,18 @@
     }
 
     function distributionPoint(thetaIndex, phiIndex) {
-      const theta = clamp(thetaIndex / THETA_STEPS, 0, 1) * THETA_MAX;
+      const thetaU = clamp(thetaIndex / THETA_STEPS, 0, 1);
+      const theta = thetaU * thetaU * THETA_MAX;
       const phi = (phiIndex / PHI_STEPS) * TAU;
       const cosTheta = Math.cos(theta);
       const density = ((sValue + 1) / (2 * Math.PI)) * Math.pow(cosTheta, sValue);
-      const peak = (sValue + 1) / (2 * Math.PI);
-      const radius = 0.2 + 1.75 * (density / peak);
+      const radius = density;
       const sinTheta = Math.sin(theta);
       return {
         x: radius * sinTheta * Math.cos(phi),
         y: radius * cosTheta,
         z: radius * sinTheta * Math.sin(phi),
         density,
-        density01: density / peak,
         theta,
       };
     }
@@ -423,7 +424,7 @@
           faces.push({
             vertices: [a, b, c, d],
             depth: centerCam.z,
-            density01: (a.density01 + b.density01 + c.density01 + d.density01) * 0.25,
+            density: (a.density + b.density + c.density + d.density) * 0.25,
           });
         }
       }
@@ -458,7 +459,7 @@
           ctx.lineTo(projected[i].x, projected[i].y);
         }
         ctx.closePath();
-        ctx.fillStyle = colorFor(face.density01, shade);
+        ctx.fillStyle = colorFor(face.density / MAX_DENSITY, shade);
         ctx.fill();
 
         if (showWire) {
@@ -471,7 +472,7 @@
 
     function drawEquatorRings(basis) {
       for (const theta of [15, 30, 45, 60, 75]) {
-        const tIndex = Math.round(theta / 90 * THETA_STEPS);
+        const tIndex = Math.round(Math.sqrt(theta / 90) * THETA_STEPS);
         let previous = null;
         for (let p = 0; p <= PHI_STEPS; p++) {
           const current = distributionPoint(tIndex, p);
